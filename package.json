@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 {
   "name": "saweriawebhook",
   "version": "1.0.0",
@@ -14,3 +15,17 @@
     "express": "^5.1.0"
   }
 }
+=======
+{
+  "name": "saweria-webhook-server",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "body-parser": "^1.20.2"
+  }
+}
+>>>>>>> 7b02b108ed5c4d1778fe50ba623b44f45c5b3b7a
