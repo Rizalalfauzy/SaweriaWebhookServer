@@ -1,45 +1,58 @@
+// server.js (debug version)
 const express = require("express");
 const bodyParser = require("body-parser");
+const cors = require("cors");
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Simpan donation terbaru
-let latestDonation = null;
+// Enable CORS
+app.use(cors());
 
-// Middleware
+// Body parser
 app.use(bodyParser.json());
 
-// Endpoint webhook dari Saweria
-app.post("/saweria-webhook", (req, res) => {
-    console.log("===== NEW WEBHOOK CALL =====");
-    console.log("RAW BODY:", req.body);
+// Temp storage untuk donation terakhir
+let latestDonation = null;
 
-    // Ambil data donasi, fallback jika undefined
+// Webhook endpoint dari Saweria
+app.post("/saweria-webhook", (req, res) => {
+    const payload = req.body;
+
+    console.log("===== NEW SAWERIA WEBHOOK =====");
+    console.log("RAW PAYLOAD:", JSON.stringify(payload, null, 2));
+
+    // Cek semua field, fallback jika tidak ada
+    const username = payload.username || payload.data?.username || "Guest";
+    const amount   = payload.amount   || payload.data?.amount   || 0;
+    const message  = payload.message  || payload.data?.message  || "";
+
     latestDonation = {
-        username: req.body.username || "Guest",
-        amount: req.body.amount || 0,
-        message: req.body.message || ""
+        username,
+        amount,
+        message
     };
 
-    console.log("STORED DONATION:", latestDonation);
+    console.log("PARSED DONATION DATA:", latestDonation);
     res.sendStatus(200);
 });
 
-// Endpoint untuk Roblox LocalScript ambil data terbaru
+// Endpoint untuk Roblox LocalScript ambil donation terakhir
 app.get("/lastsawer", (req, res) => {
     if (latestDonation) {
+        console.log("Sending latest donation to Roblox:", latestDonation);
         res.json({ newSawer: true, data: latestDonation });
-        console.log("SENT DONATION TO CLIENT:", latestDonation);
-        latestDonation = null; // reset supaya tidak duplikat
+        latestDonation = null; // reset setelah dikirim
     } else {
         res.json({ newSawer: false });
     }
 });
 
-// Health check sederhana
+// Health check
 app.get("/", (req, res) => {
-    res.send("Saweria Webhook Server Online");
+    res.json({ status: "OK", message: "Saweria Webhook Server Online" });
 });
 
-// Start server
-app.listen(PORT, () => console.log(`Saweria webhook server running on port ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`Saweria webhook server running on port ${PORT}`);
+});
