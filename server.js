@@ -1,44 +1,37 @@
-import express from "express";
-import cors from "cors";
-
+// server.js
+const express = require("express");
+const bodyParser = require("body-parser");
+const cors = require("cors");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
+let latestDonation = null;
+
 app.use(cors());
-app.use(express.json());
+app.use(bodyParser.json());
 
-// Health check
-app.get("/", (req, res) => {
-    res.json({ status: "OK", message: "Saweria Webhook Server Online" });
-});
-
-// Webhook endpoint
+// Endpoint webhook dari Saweria
 app.post("/saweria-webhook", (req, res) => {
-    console.log("===== NEW WEBHOOK CALL =====");
+    console.log("PAYLOAD RECEIVED:", req.body); // debug untuk cek data asli
 
-    // Data ORIGINAL dari request body
-    const body = req.body;
-    console.log("RAW BODY:", body);
-
-    // Validasi format
-    if (!body || !body.data) {
-        console.log("❌ Invalid payload, missing body.data");
-        return res.status(200).json({ ok: true });
-    }
-
-    const donation = {
-        username: body.data.username || "Unknown",
-        amount: body.data.amount || 0,
-        message: body.data.message || "",
+    latestDonation = {
+        username: req.body.username || "Guest",
+        amount: req.body.amount || 0,
+        message: req.body.message || ""
     };
 
-    console.log("PARSED DONATION:", donation);
-
-    // Kirim response ke Roblox
-    res.json(donation);
+    console.log("New donation stored:", latestDonation);
+    res.sendStatus(200);
 });
 
-app.listen(PORT, () => {
-    console.log(`SAWERIA WEBHOOK SERVER RUNNING ON PORT ${PORT}`);
+// Endpoint untuk Roblox LocalScript /lastsawer
+app.get("/lastsawer", (req, res) => {
+    if (latestDonation) {
+        res.json({ newSawer: true, data: latestDonation });
+        latestDonation = null; // reset setelah dikirim ke Roblox
+    } else {
+        res.json({ newSawer: false });
+    }
 });
+
+app.listen(PORT, () => console.log(`Saweria webhook server running on port ${PORT}`));
