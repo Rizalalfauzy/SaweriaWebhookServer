@@ -1,6 +1,7 @@
 {
   "name": "saweria-webhook-server",
   "version": "1.0.0",
+  "description": "Server untuk menerima webhook Saweria dan diteruskan ke Roblox",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -8,6 +9,11 @@
   "dependencies": {
     "express": "^4.18.2",
     "cors": "^2.8.5"
-  }
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "keywords": ["saweria", "roblox", "webhook", "donation"],
+  "author": "Rizal",
+  "license": "MIT"
 }
-
