@@ -6,32 +6,31 @@ const PORT = process.env.PORT || 3000;
 
 let latestDonation = null;
 
-// Middleware JSON
 app.use(bodyParser.json());
 
-// Endpoint untuk menerima webhook dari Saweria
+// Endpoint webhook dari Saweria
 app.post("/saweria-webhook", (req, res) => {
-    const data = req.body;
+    console.log("PAYLOAD RECEIVED:", req.body); // debug untuk cek data asli
 
-    // Ambil field sesuai payload Saweria asli
+    // Ambil field yang ada, fallback jika undefined
     latestDonation = {
-        username: data.donor || "Guest",
-        amount: data.value || 0,
-        message: data.note || ""
+        username: req.body.username || "Guest",
+        amount: req.body.amount || 0,
+        message: req.body.message || ""
     };
 
-    console.log("New donation:", latestDonation);
+    console.log("New donation stored:", latestDonation);
     res.sendStatus(200);
 });
 
-// Endpoint untuk Roblox ambil data terbaru
+// Endpoint untuk Roblox LocalScript /lastsawer
 app.get("/lastsawer", (req, res) => {
     if (latestDonation) {
         res.json({ newSawer: true, data: latestDonation });
-        latestDonation = null; // reset setelah diambil
+        latestDonation = null; // reset setelah dikirim ke Roblox
     } else {
         res.json({ newSawer: false });
     }
 });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Saweria webhook server running on port ${PORT}`));
