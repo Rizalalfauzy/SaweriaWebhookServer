@@ -1,37 +1,45 @@
 // server.js
 const express = require("express");
-const bodyParser = require("body-parser");
+const cors = require("cors");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 let latestDonation = null;
 
-app.use(bodyParser.json());
+// Middleware
+app.use(cors());
+app.use(express.json({ limit: "1mb" }));
 
-// Endpoint webhook dari Saweria
+// Root untuk cek server
+app.get("/", (req, res) => {
+    res.send("Saweria webhook server is running");
+});
+
+// Endpoint webhook Saweria
 app.post("/saweria-webhook", (req, res) => {
-    console.log("PAYLOAD RECEIVED:", req.body); // debug untuk cek data asli
+    console.log("PAYLOAD RECEIVED:", req.body);
 
-    // Ambil field yang ada, fallback jika undefined
+    const data = req.body || {};
+
     latestDonation = {
-        username: req.body.username || "Guest",
-        amount: req.body.amount || 0,
-        message: req.body.message || ""
+        username: (data.name && data.name !== "") ? data.name : "Someone",
+        amount: (data.value != null) ? data.value : 0,
+        message: data.message || ""
     };
 
     console.log("New donation stored:", latestDonation);
-    res.sendStatus(200);
+    res.status(200).json({ success: true });
 });
 
-// Endpoint untuk Roblox LocalScript /lastsawer
+// Endpoint diambil Roblox
 app.get("/lastsawer", (req, res) => {
     if (latestDonation) {
-        res.json({ newSawer: true, data: latestDonation });
-        latestDonation = null; // reset setelah dikirim ke Roblox
+        const sendData = { newSawer: true, data: latestDonation };
+        latestDonation = null; // reset setelah dikirim
+        res.json(sendData);
     } else {
         res.json({ newSawer: false });
     }
 });
 
 app.listen(PORT, () => console.log(`Saweria webhook server running on port ${PORT}`));
-
