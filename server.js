@@ -1,57 +1,48 @@
 // server.js
 const express = require("express");
+const bodyParser = require("body-parser");
 const cors = require("cors");
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 let latestDonation = null;
 
-// Middleware aman
 app.use(cors());
-app.use(express.json({ limit: "1mb" }));
+app.use(bodyParser.json());
 
-// Root (biar Railway ga 502)
-app.get("/", (req, res) => {
-    res.send("Saweria webhook server is running");
-});
-
-// Webhook Saweria
+// Webhook dari Saweria (POST)
 app.post("/saweria-webhook", (req, res) => {
-    try {
-        console.log("PAYLOAD RECEIVED:", req.body);
+    console.log("RAW PAYLOAD:", req.body);
 
-        const data = req.body || {};
-        latestDonation = {
-            username: data.username || "Guest",
-            amount: data.amount || 0,
-            message: data.message || ""
-        };
-
-        console.log("Saved donation:", latestDonation);
-
-        res.status(200).json({ success: true });
-    } catch (err) {
-        console.error("ERROR POST:", err);
-        res.status(500).json({ error: "Server error" });
+    // Pastikan format sesuai Saweria
+    if (!req.body || !req.body.data) {
+        console.log("Payload tidak valid / tidak ada body.data");
+        return res.sendStatus(200);
     }
+
+    const d = req.body.data;
+
+    latestDonation = {
+        username: d.username || "Guest",
+        amount: d.amount || 0,
+        message: d.message || ""
+    };
+
+    console.log("Stored Donation:", latestDonation);
+    res.sendStatus(200);
 });
 
-// Endpoint diambil Roblox
+// Roblox GET /lastsawer
 app.get("/lastsawer", (req, res) => {
-    try {
-        if (latestDonation) {
-            const sendData = { newSawer: true, data: latestDonation };
-            latestDonation = null; // reset
-            res.json(sendData);
-        } else {
-            res.json({ newSawer: false });
-        }
-    } catch (err) {
-        console.error("ERROR GET:", err);
-        res.status(500).json({ error: "Server error" });
+    if (latestDonation) {
+        res.json({ newSawer: true, data: latestDonation });
+        latestDonation = null;
+    } else {
+        res.json({ newSawer: false });
     }
 });
 
 app.listen(PORT, () => {
-    console.log(`Saweria server running on port ${PORT}`);
+    console.log(`Saweria webhook server running on port ${PORT}`);
 });
