@@ -1,42 +1,48 @@
 // server.js
 const express = require("express");
+const bodyParser = require("body-parser");
 const cors = require("cors");
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 let latestDonation = null;
 
 app.use(cors());
-app.use(express.json({ limit: "1mb" }));
+app.use(bodyParser.json());
 
-// Root untuk cek server
-app.get("/", (req, res) => res.send("Saweria webhook server running"));
-
-// Endpoint webhook dari Saweria atau test
+// Webhook dari Saweria (POST)
 app.post("/saweria-webhook", (req, res) => {
-    console.log("PAYLOAD RECEIVED:", req.body);
+    console.log("RAW PAYLOAD:", req.body);
 
-    const data = req.body || {};
+    // Pastikan format sesuai Saweria
+    if (!req.body || !req.body.data) {
+        console.log("Payload tidak valid / tidak ada body.data");
+        return res.sendStatus(200);
+    }
 
-    // Ambil nama dan nominal dari semua kemungkinan field
+    const d = req.body.data;
+
     latestDonation = {
-        username: data.donator_name || data.name || "Someone",
-        amount: data.amount_raw || data.value || 0,
-        message: data.message || ""
+        username: d.username || "Guest",
+        amount: d.amount || 0,
+        message: d.message || ""
     };
 
-    console.log("New donation stored:", latestDonation);
-    res.status(200).json({ success: true });
+    console.log("Stored Donation:", latestDonation);
+    res.sendStatus(200);
 });
 
-// Endpoint untuk Roblox LocalScript
+// Roblox GET /lastsawer
 app.get("/lastsawer", (req, res) => {
     if (latestDonation) {
         res.json({ newSawer: true, data: latestDonation });
-        latestDonation = null; // reset setelah dikirim
+        latestDonation = null;
     } else {
         res.json({ newSawer: false });
     }
 });
 
-app.listen(PORT, () => console.log(`Saweria webhook server running on port ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`Saweria webhook server running on port ${PORT}`);
+});
