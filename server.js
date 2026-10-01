@@ -17,7 +17,9 @@ const PORT    = process.env.PORT || 3000;
 
 const EXPIRE_MS       = 5 * 60 * 1000;  // 5 menit
 const DEAD_THRESHOLD  = 20 * 1000;       // 20 detik tidak poll = dead
-const DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1518633050009764093/7lc_EnvnvFRwo-JetinYXN5aDX-weIdW2sf450SAXSW1X9kVJjK15fE8zgUZRq9k62mg";
+// ⚠️ Lebih aman taruh di environment variable DISCORD_WEBHOOK (di dashboard hosting),
+//    biar URL-nya gak ikut kesebar kalau file ini dibagi.
+const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK || "https://discord.com/api/webhooks/1518633050009764093/7lc_EnvnvFRwo-JetinYXN5aDX-weIdW2sf450SAXSW1X9kVJjK15fE8zgUZRq9k62mg";
 
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
@@ -197,7 +199,18 @@ app.post("/saweria-webhook", (req, res) => {
         return res.status(200).json({ success: true, duplicate: true });
     }
 
-    const amount = parseInt(d.amount_raw) || parseInt(d.amount) || 0;
+    // ✅ NOMINAL ASLI: angka yang DIKETIK donatur (tanpa biaya admin).
+    //    Saweria naruh ini di etc.amount_to_display. amount_raw = udah kena admin.
+    //    Kalau field-nya gak ada (payload versi lama), baru fallback ke amount_raw.
+    const toInt = (v) => {
+        const n = parseInt(String(v ?? "").replace(/[^0-9]/g, ""), 10);
+        return Number.isFinite(n) && n > 0 ? n : 0;
+    };
+    const etc          = (d.etc && typeof d.etc === "object") ? d.etc : {};
+    const amountKetik  = toInt(etc.amount_to_display) || toInt(d.amount_to_display);
+    const amountRaw    = toInt(d.amount_raw) || toInt(d.amount);
+    const amount       = amountKetik || amountRaw; // dipake buat Roblox
+    console.log(`[Nominal] ketik=${amountKetik} | raw(+admin)=${amountRaw} | cut=${d.cut ?? "-"} | dipakai=${amount}`);
     if (amount <= 0) {
         console.warn(`[Warning] Amount 0 atau tidak valid untuk id: ${id}`);
     }
@@ -207,7 +220,8 @@ app.post("/saweria-webhook", (req, res) => {
     const entry = {
         id:          id,
         username:    username,
-        amount:      amount,
+        amount:      amount,      // nominal ketikan donatur
+        amountRaw:   amountRaw,   // nominal + admin (buat report pemasukan)
         message:     d.message || "",
         expireAt:    Date.now() + EXPIRE_MS,
         receivedAt:  new Date().toISOString(),
@@ -217,11 +231,12 @@ app.post("/saweria-webhook", (req, res) => {
     donationQueue.push(entry);
 
     // ✅ Akumulasi ke daily report (langsung saat donasi masuk, bukan tunggu confirm)
-    if (amount > 0) {
-        dailyDonations[username] = (dailyDonations[username] || 0) + amount;
-        dailyTotal += amount;
+    const amountReport = amountRaw || amount; // report Discord: tetep pemasukan asli (kayak sebelumnya)
+    if (amountReport > 0) {
+        dailyDonations[username] = (dailyDonations[username] || 0) + amountReport;
+        dailyTotal += amountReport;
         dailyCount += 1;
-        console.log(`[Daily] +${formatRupiah(amount)} dari ${username} | Hari ini: ${formatRupiah(dailyTotal)} (${dailyCount}x)`);
+        console.log(`[Daily] +${formatRupiah(amountReport)} dari ${username} | Hari ini: ${formatRupiah(dailyTotal)} (${dailyCount}x)`);
     }
 
     console.log(`[Queued] id=${id} | user=${username} | amount=${amount} | Queue: ${donationQueue.length}`);
@@ -251,7 +266,9 @@ app.get("/lastsawer", (req, res) => {
                 data: {
                     id:       next.id,
                     username: next.username,
-                    amount:   next.amount,
+                    amount:   next.amount,          // = nominal ketikan donatur
+                    amount_to_display: next.amount, // biar SaweriaHandler v18 langsung kebaca
+                    amount_raw: next.amountRaw,
                     message:  next.message,
                 }
             });
