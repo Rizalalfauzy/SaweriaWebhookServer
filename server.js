@@ -4,7 +4,7 @@ const app     = express();
 const PORT    = process.env.PORT || 3000;
 
 // ============================================================
-//   🪝 SAWERIA WEBHOOK SERVER — Multi-Server Edition
+//   🪝 SAWERIA WEBHOOK SERVER — Multi-Server Edition (BAD HABIT)
 //   ✅ FIFO queue
 //   ✅ Dedup by ID
 //   ✅ Multi-server tracking — tiap server punya confirm sendiri
@@ -19,7 +19,7 @@ const EXPIRE_MS       = 5 * 60 * 1000;  // 5 menit
 const DEAD_THRESHOLD  = 20 * 1000;       // 20 detik tidak poll = dead
 // ⚠️ Lebih aman taruh di environment variable DISCORD_WEBHOOK (di dashboard hosting),
 //    biar URL-nya gak ikut kesebar kalau file ini dibagi.
-const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK || "https://discord.com/api/webhooks/1518633050009764093/7lc_EnvnvFRwo-JetinYXN5aDX-weIdW2sf450SAXSW1X9kVJjK15fE8zgUZRq9k62mg";
+const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK || ""; // BAD HABIT: isi lewat Variables di Railway (webhook Discord khusus BAD HABIT)
 
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
@@ -70,6 +70,7 @@ function formatRupiah(amount) {
 // ============================================================
 
 async function sendDiscordReport() {
+    if (!DISCORD_WEBHOOK) { console.log("[Discord] DISCORD_WEBHOOK belum diisi, report di-skip"); dailyDonations = {}; dailyTotal = 0; dailyCount = 0; return; }
     const now    = new Date();
     // Tanggal WIB (UTC+7)
     const wib    = new Date(now.getTime() + 7 * 60 * 60 * 1000);
@@ -107,7 +108,7 @@ async function sendDiscordReport() {
                 },
             ],
             footer: {
-                text: "Back 2 Room • Saweria Report",
+                text: "BAD HABIT • Saweria Report",
             },
             timestamp: new Date().toISOString(),
         }]
