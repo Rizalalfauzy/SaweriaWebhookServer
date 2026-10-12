@@ -12,14 +12,11 @@ const PORT    = process.env.PORT || 3000;
 //   ✅ Server dianggap "dead" kalau tidak poll > DEAD_THRESHOLD ms
 //   ✅ Auto-expire 5 menit
 //   ✅ /status, /clear endpoint
-//   ✅ Daily Discord report jam 06:00 WIB
+//   (BAD HABIT: tanpa recap Discord)
 // ============================================================
 
 const EXPIRE_MS       = 5 * 60 * 1000;  // 5 menit
 const DEAD_THRESHOLD  = 20 * 1000;       // 20 detik tidak poll = dead
-// ⚠️ Lebih aman taruh di environment variable DISCORD_WEBHOOK (di dashboard hosting),
-//    biar URL-nya gak ikut kesebar kalau file ini dibagi.
-const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK || ""; // BAD HABIT: isi lewat Variables di Railway (webhook Discord khusus BAD HABIT)
 
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
@@ -30,12 +27,6 @@ app.use(express.json({ limit: "1mb" }));
 
 let donationQueue = [];
 const activeServers = new Map();
-
-// Daily report accumulator
-// Format: { "username": totalAmount }
-let dailyDonations = {};
-let dailyTotal     = 0;
-let dailyCount     = 0;
 
 // ============================================================
 // HELPERS
@@ -66,96 +57,6 @@ function formatRupiah(amount) {
 }
 
 // ============================================================
-// DISCORD REPORT
-// ============================================================
-
-async function sendDiscordReport() {
-    if (!DISCORD_WEBHOOK) { console.log("[Discord] DISCORD_WEBHOOK belum diisi, report di-skip"); dailyDonations = {}; dailyTotal = 0; dailyCount = 0; return; }
-    const now    = new Date();
-    // Tanggal WIB (UTC+7)
-    const wib    = new Date(now.getTime() + 7 * 60 * 60 * 1000);
-    const tgl    = wib.toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
-
-    // Sort donor by amount descending
-    const sorted = Object.entries(dailyDonations)
-        .sort((a, b) => b[1] - a[1]);
-
-    let donorList = "";
-    if (sorted.length === 0) {
-        donorList = "_Belum ada donasi hari ini_";
-    } else {
-        sorted.forEach(([name, amount], i) => {
-            const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`;
-            donorList += `${medal} **${name}** — ${formatRupiah(amount)}\n`;
-        });
-    }
-
-    const embed = {
-        embeds: [{
-            title: `📊 Daily Saweria Report — ${tgl}`,
-            color: 0xF97316, // orange
-            description: donorList,
-            fields: [
-                {
-                    name: "💰 Total Pemasukan",
-                    value: `**${formatRupiah(dailyTotal)}**`,
-                    inline: true,
-                },
-                {
-                    name: "🔢 Total Donasi",
-                    value: `**${dailyCount}x**`,
-                    inline: true,
-                },
-            ],
-            footer: {
-                text: "BAD HABIT • Saweria Report",
-            },
-            timestamp: new Date().toISOString(),
-        }]
-    };
-
-    try {
-        const res = await fetch(DISCORD_WEBHOOK, {
-            method:  "POST",
-            headers: { "Content-Type": "application/json" },
-            body:    JSON.stringify(embed),
-        });
-        if (res.ok) {
-            console.log(`[Discord] Report harian terkirim — Total: ${formatRupiah(dailyTotal)} | ${dailyCount} donasi`);
-        } else {
-            console.error(`[Discord] Gagal kirim report: ${res.status} ${res.statusText}`);
-        }
-    } catch (err) {
-        console.error(`[Discord] Error kirim report:`, err.message);
-    }
-
-    // Reset accumulator setelah kirim
-    dailyDonations = {};
-    dailyTotal     = 0;
-    dailyCount     = 0;
-}
-
-// ============================================================
-// CRON — Cek setiap menit, kirim jam 06:00 WIB (= 23:00 UTC)
-// ============================================================
-let lastReportDate = null;
-
-setInterval(() => {
-    const now = new Date();
-    // Konversi ke WIB
-    const wib    = new Date(now.getTime() + 7 * 60 * 60 * 1000);
-    const hour   = wib.getUTCHours();
-    const minute = wib.getUTCMinutes();
-    const today  = wib.toISOString().slice(0, 10); // "2026-06-22"
-
-    if (hour === 6 && minute === 0 && lastReportDate !== today) {
-        lastReportDate = today;
-        console.log(`[Cron] Jam 06:00 WIB — kirim daily report`);
-        sendDiscordReport();
-    }
-}, 60 * 1000);
-
-// ============================================================
 // CLEANUP — setiap 1 menit
 // ============================================================
 setInterval(() => {
@@ -180,7 +81,7 @@ setInterval(() => {
 // ROOT
 // ============================================================
 app.get("/", (req, res) => {
-    res.send("Saweria webhook server running ✅ (Multi-Server Edition + Daily Report)");
+    res.send("Saweria webhook server running ✅ (Multi-Server Edition)");
 });
 
 // ============================================================
@@ -230,15 +131,6 @@ app.post("/saweria-webhook", (req, res) => {
     };
 
     donationQueue.push(entry);
-
-    // ✅ Akumulasi ke daily report (langsung saat donasi masuk, bukan tunggu confirm)
-    const amountReport = amountRaw || amount; // report Discord: tetep pemasukan asli (kayak sebelumnya)
-    if (amountReport > 0) {
-        dailyDonations[username] = (dailyDonations[username] || 0) + amountReport;
-        dailyTotal += amountReport;
-        dailyCount += 1;
-        console.log(`[Daily] +${formatRupiah(amountReport)} dari ${username} | Hari ini: ${formatRupiah(dailyTotal)} (${dailyCount}x)`);
-    }
 
     console.log(`[Queued] id=${id} | user=${username} | amount=${amount} | Queue: ${donationQueue.length}`);
 
@@ -324,11 +216,6 @@ app.get("/status", (req, res) => {
         queueSize:     donationQueue.length,
         serverTime:    new Date().toISOString(),
         activeServers: aliveIds,
-        dailyReport: {
-            total:     dailyTotal,
-            count:     dailyCount,
-            donations: dailyDonations,
-        },
         allServers: [...activeServers.entries()].map(([id, lastSeen]) => ({
             id,
             lastSeenAgo: Math.round((now - lastSeen) / 1000) + "s",
@@ -359,14 +246,4 @@ app.post("/clear", (req, res) => {
 });
 
 // ============================================================
-// REPORT MANUAL — trigger report sekarang tanpa nunggu jam 06:00
-// POST /report-now
-// ============================================================
-app.post("/report-now", (req, res) => {
-    console.log(`[Report] Manual trigger report`);
-    sendDiscordReport();
-    res.json({ success: true, message: "Report dikirim ke Discord" });
-});
-
-// ============================================================
-app.listen(PORT, () => console.log(`Saweria webhook server running on port ${PORT} (Multi-Server Edition + Daily Report)`));
+app.listen(PORT, () => console.log(`Saweria webhook server running on port ${PORT} (Multi-Server Edition)`));
